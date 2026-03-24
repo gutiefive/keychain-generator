@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+backend/venv/
+backend/.venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Uploads / outputs (generated at runtime)
+backend/uploads/
+backend/output/
+backend/*.png
+backend/*.svg
+backend/*.stl
+backend/*.3mf
+
+# Environment
+.env
+.env.local
