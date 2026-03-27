@@ -799,6 +799,125 @@ def build_color_meshes(
     return color_meshes, base_plate
 
 
+def _trace_combined_silhouette_base(
+    all_triangles, thickness, margin_mm,
+    keyhole_type="round_hole",
+    px_per_mm=8.0,
+    simplify_tol=1.5,
+    min_contour_area=30.0,
+):
+    """
+    Rasterize all triangles (logo + text) into a 2D bitmap, dilate for
+    an outline margin, trace contours, and extrude as the base plate.
+    Produces the "sticker-cut" look where the base hugs all content.
+    """
+    from skimage.morphology import dilation, disk
+    from keyhole import round_hole, tab_loop
+
+    if not all_triangles:
+        return []
+
+    all_x = [v[0] for tri in all_triangles for v in tri]
+    all_y = [v[1] for tri in all_triangles for v in tri]
+    x_min, x_max = min(all_x), max(all_x)
+    y_min, y_max = min(all_y), max(all_y)
+
+    pad_mm = margin_mm + 2.0
+    x_min -= pad_mm
+    x_max += pad_mm
+    y_min -= pad_mm
+    y_max += pad_mm
+
+    w_mm = x_max - x_min
+    h_mm = y_max - y_min
+    img_w = max(10, int(math.ceil(w_mm * px_per_mm)))
+    img_h = max(10, int(math.ceil(h_mm * px_per_mm)))
+
+    bitmap = np.zeros((img_h, img_w), dtype=np.uint8)
+
+    def mm_to_px(mx, my):
+        px = (mx - x_min) / w_mm * (img_w - 1)
+        py = (y_max - my) / h_mm * (img_h - 1)
+        return int(round(px)), int(round(py))
+
+    from PIL import Image as _Img, ImageDraw as _IDraw
+    pil_img = _Img.new("L", (img_w, img_h), 0)
+    draw = _IDraw.Draw(pil_img)
+    for tri in all_triangles:
+        pts = [mm_to_px(v[0], v[1]) for v in tri]
+        draw.polygon(pts, fill=255)
+    bitmap = np.array(pil_img)
+
+    dilate_px = max(1, int(round(margin_mm * px_per_mm)))
+    bitmap = dilation(bitmap, disk(dilate_px)).astype(np.uint8)
+    binary = (bitmap > 128).astype(np.float64)
+
+    padded = np.pad(binary, 1, mode="constant", constant_values=0)
+    contours = find_contours(padded, 0.5)
+    if not contours:
+        all_x2 = [v[0] for tri in all_triangles for v in tri]
+        all_y2 = [v[1] for tri in all_triangles for v in tri]
+        rect = [
+            [min(all_x2) - margin_mm, min(all_y2) - margin_mm],
+            [max(all_x2) + margin_mm, min(all_y2) - margin_mm],
+            [max(all_x2) + margin_mm, max(all_y2) + margin_mm],
+            [min(all_x2) - margin_mm, max(all_y2) + margin_mm],
+        ]
+        return extrude_polygon_with_walls(rect, None, 0.0, thickness)
+
+    contours.sort(key=lambda c: _contour_area_np(c), reverse=True)
+
+    rings = []
+    for contour in contours:
+        contour = contour - 1.0
+        area = _contour_area_np(contour)
+        if area < min_contour_area:
+            continue
+
+        simplified = approximate_polygon(contour, tolerance=simplify_tol)
+        if len(simplified) < 3:
+            continue
+        if np.allclose(simplified[0], simplified[-1], atol=0.1):
+            simplified = simplified[:-1]
+        if len(simplified) < 3:
+            continue
+
+        ring_mm = []
+        for pt in simplified:
+            row, col = float(pt[0]), float(pt[1])
+            mx = x_min + col / (img_w - 1) * w_mm
+            my = y_max - row / (img_h - 1) * h_mm
+            ring_mm.append([mx, my])
+
+        sa = _signed_area(ring_mm)
+        if sa < 0:
+            ring_mm = ring_mm[::-1]
+
+        ring_mm = _clean_ring(ring_mm)
+        if len(ring_mm) < 3:
+            continue
+        rings.append(ring_mm)
+
+    if not rings:
+        return []
+
+    base_outer = rings[0]
+    base_holes = rings[1:] if len(rings) > 1 else []
+
+    if keyhole_type == "round_hole":
+        base_outer, kh = round_hole(base_outer)
+        base_holes.append(kh)
+    elif keyhole_type == "tab_loop":
+        base_outer, kh = tab_loop(base_outer)
+        base_holes.append(kh)
+
+    return extrude_polygon_with_walls(
+        base_outer,
+        base_holes if base_holes else None,
+        0.0, thickness,
+    )
+
+
 def _fallback_base_plate(all_triangles, scale, thickness, margin):
     """Simple bounding-box base plate when no PNG is available."""
     all_x = []

@@ -20,8 +20,8 @@ def _circle_pts(cx: float, cy: float, r: float, segments: int = 32) -> List[List
 
 def round_hole(
     shape_contour: List[List[float]],
-    diameter: float = 4.0,
-    offset_from_top: float = 3.0,
+    diameter: float = 5.0,
+    offset_from_top: float = 4.0,
 ) -> Tuple[List[List[float]], List[List[float]]]:
     """
     Add a round keyhole near the top of the shape.
@@ -42,9 +42,9 @@ def round_hole(
 
 def tab_loop(
     shape_contour: List[List[float]],
-    tab_width: float = 8.0,
-    tab_height: float = 6.0,
-    hole_diameter: float = 4.0,
+    tab_width: float = 10.0,
+    tab_height: float = 8.0,
+    hole_diameter: float = 5.0,
     segments: int = 16,
 ) -> Tuple[List[List[float]], List[List[float]]]:
     """

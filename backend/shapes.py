@@ -9,7 +9,7 @@ import math
 from typing import List
 
 
-def rectangle(w: float, h: float, corner_radius: float = 2.0) -> List[List[float]]:
+def rectangle(w: float, h: float, corner_radius: float = 3.5) -> List[List[float]]:
     """Rounded-corner rectangle centered at origin."""
     r = min(corner_radius, w / 2, h / 2)
     if r < 0.1:
